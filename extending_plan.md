@@ -1,16 +1,16 @@
 # Extending Plan — Middle Ground: Plugins + Monitoring
 
-Goal
-----
+## Goal
+
 Create a maintainable middle-ground architecture that: (1) keeps `yt-dlp` as the default backend, (2) allows custom, site-specific extractors to be added as plugins per-domain, and (3) provides a monitoring/test harness to detect extractor regressions early.
 
-Constraints
------------
+## Constraints
+
 - Do not modify `downloader.py` as part of this plan. The plan describes external modules, tests, and changes you can implement.
 - Keep changes minimal and incremental; prioritize a working prototype for one site, then generalize.
 
-Deliverables (concrete)
------------------------
+## Deliverables (concrete)
+
 - `ext/plugins/README.md` (how to write a plugin)
 - `ext/plugins/example_site.py` (prototype extractor for one site)
 - `ext/registry.py` (lightweight plugin registry + loader)
@@ -18,14 +18,15 @@ Deliverables (concrete)
 - `tools/monitor.py` (small monitoring harness to run checks)
 - CI workflow to run monitoring periodically (optional, described here)
 
-Design overview
----------------
+## Design overview
+
 1. Plugin extractor modules implement a small, well-documented interface (see "Plugin API" below).
 2. A runtime registry maps domains (or matchers) to extractor modules. When a URL is requested, the registry is consulted first; if no registered extractor handles the URL, fall back to `yt-dlp`.
 3. The downloader's core (you will not change `downloader.py` now) can be left untouched; instead, the registry can expose an API that your wrapper calls before calling `yt-dlp`.
 
-Part A — Prototype a custom extractor for one target site
--------------------------------------------------------
+**Part A — Prototype a custom extractor for one target site**
+------------------------------------------------------------
+
 Objective: write a single-site extractor that can: identify the media, return metadata and direct media URLs (or HLS m3u8), and allow the wrapper to download or hand the URL to `ffmpeg`.
 
 1) Choose target site and goals
@@ -104,8 +105,9 @@ def extract(url: str, *, session: requests.Session | None = None, headers=None, 
     return info
 ```
 
-Part B — Add a plugin API so custom extractors can be registered per-domain
------------------------------------------------------------------------
+**Part B — Add a plugin API so custom extractors can be registered per-domain**
+----------------------------------------------------------------------------
+
 Objective: design a simple registry so the downloader can consult plugins first.
 
 1) Registry responsibilities
@@ -145,18 +147,19 @@ def find_extractor(url: str):
     return None
 ```
 
-3) Integration strategy (without changing `downloader.py` yet)
+1) Integration strategy (without changing `downloader.py` yet)
    - Add a small shim script `tools/wrapper.py` that first calls `find_extractor(url)`. If found, call `extract()` and either hand results to `ffmpeg` for download or to `yt-dlp` (if it can accept a direct URL). If not found, call the existing `downloader.py` (or its internals) as fallback.
 
-4) Plugin packaging
+2) Plugin packaging
    - Encourage plugin authors to implement pure-Python modules with `can_handle` and `extract` functions.
    - Optionally support setuptools entry points `downloader.plugins` for discoverability if you later package plugins separately.
 
-5) Security and isolation
+3) Security and isolation
    - Plugins are arbitrary code. If you plan to run third-party plugins, consider sandboxing (not trivial in Python). For now, recommend audited/first-party plugins.
 
-Part C — Keep `yt-dlp` as default and implement monitoring/test harness for failing sites
------------------------------------------------------------------------------------
+**Part C — Keep `yt-dlp` as default and implement monitoring/test harness for failing sites**
+-------------------------------------------------------------------------------------------
+
 Objective: Detect when extractors (custom or yt-dlp) stop working; run checks frequently and fail fast in CI.
 
 1) Monitoring harness (`tools/monitor.py`)
@@ -177,42 +180,49 @@ Objective: Detect when extractors (custom or yt-dlp) stop working; run checks fr
    - Unit tests for `tools/monitor.py` using `responses` or `requests-mock` to simulate site responses and `yt-dlp` calls mocked to return simple info.
 
 Testing strategy (local & CI)
----------------------------
+----------------------------
+
 - Unit tests: small fixtures, local HTML files, `requests-mock` responses, test extractor parsing functions.
 - Integration tests: live-check tests that are marked `integration` and skipped on default CI runs; optionally run nightly.
 - Regression recording: store canonical outputs (JSON) from an extractor and fail tests if the new output differs significantly.
 
 Example test files to add
 -------------------------
+
 - `tests/test_plugin_api.py` — verify `can_handle` and `extract` contract using fixtures.
 - `tests/test_monitor.py` — test monitoring logic with mocked `yt-dlp` and plugin modules.
 
 Operational guidance
 --------------------
+
 - Prioritize sites your users care about; don’t attempt to reimplement a general-purpose scraping engine.
 - Prefer `requests` + parsing for simple sites; use `playwright` only when necessary (JS-heavy pages).
 - Use fixtures and `requests-mock` to make unit tests deterministic and fast.
 
 Legal & ethical notes
 ---------------------
+
 - Confirm that scraping/downloading content from a target site is permitted by its TOS and local law. Respect robots.txt where appropriate and avoid bypassing paywalls or DRM.
 
 Acceptance criteria (for each phase)
 -----------------------------------
+
 - Prototype extractor: `can_handle(url)` correctly matches target URLs; `extract(url)` returns an info dict for test fixtures.
 - Plugin API: registry can discover and return plugin modules; `find_extractor(url)` returns the right module for test URLs.
 - Monitoring: `tools/monitor.py` runs and reports pass/fail for a small set of targets; CI can run a smoke test and fail when extraction fails.
 
 Prioritized next steps (what to do first)
 ----------------------------------------
+
 1. Implement `ext/plugins/example_site.py` and `tests/test_plugin_api.py` using a saved HTML fixture. (High priority — proves interface.)
 2. Implement `ext/registry.py` with a simple import-based discovery. Add unit tests.
 3. Create `tools/wrapper.py` shim that demonstrates using the registry and falling back to `yt-dlp`.
 4. Implement `tools/monitor.py` with a small `monitor_targets.yml` and run locally.
 5. Add CI jobs: a `smoke` test on PRs and scheduled monitoring runs nightly.
 
-Appendix — Suggested JSON schema for extractor info
---------------------------------------------------
+## Appendix — Suggested JSON schema for extractor info
+
+```json
 {
   "id": "string",
   "title": "string",
@@ -224,5 +234,4 @@ Appendix — Suggested JSON schema for extractor info
   "subtitles": {"en": [{"url":"..."}]},
   "is_live": false
 }
-
-If you want, I can also scaffold the first plugin and the registry now (without touching `downloader.py`) so you have runnable examples. Which site should I prototype for you, or do you prefer a synthetic example?  
+```
