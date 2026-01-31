@@ -13,6 +13,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Optional, List
+from typing import Optional, List, Dict
 import os
 import configparser
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -89,6 +90,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Custom yt-dlp format string (overrides defaults).",
     )
     parser.add_argument(
+        "--force-generic",
+        action="store_true",
+        dest="force_generic",
+        help="Force yt-dlp to use the generic extractor (useful for non-standard sites).",
+    )
+    parser.add_argument(
+        "--extractor-args",
+        dest="extractor_args",
+        action="append",
+        default=[],
+        help=(
+            "Pass extractor-specific arguments to yt-dlp."
+            " Syntax: extractor:arg1=val1&arg2=val2 (repeatable)."
+        ),
+    )
+    parser.add_argument(
         "--audio-format",
         dest="audio_format",
         choices=["mp3", "aac", "opus", "m4a", "wav"],
@@ -132,6 +149,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="Additional HTTP header to send (can be repeated): 'Key: Value'",
+    )
+    parser.add_argument(
+        "--cookies",
+        dest="cookies",
+        default=None,
+        help="Path to a cookies file (Netscape/HTTP cookiejar) to send with requests.",
     )
     return parser
 
@@ -204,6 +227,29 @@ def parse_headers(header_list: List[str]) -> dict:
     return headers
 
 
+def parse_extractor_args(arg_list: List[str]) -> Dict[str, str]:
+    """Parse a list of extractor-arg strings into a dict suitable for yt-dlp.
+
+    Each item should be in the form `extractor:arg1=val1&arg2=val2` (the same
+    format accepted by yt-dlp's CLI). Multiple entries for the same extractor
+    will be concatenated with '&'.
+    """
+    out: Dict[str, str] = {}
+    for item in arg_list or []:
+        if not item or ":" not in item:
+            continue
+        name, args = item.split(":", 1)
+        name = name.strip()
+        args = args.strip()
+        if not name or not args:
+            continue
+        if name in out and out[name]:
+            out[name] = out[name] + "&" + args
+        else:
+            out[name] = args
+    return out
+
+
 def run_download_with_retries(
     url: str,
     args: argparse.Namespace,
@@ -228,6 +274,9 @@ def run_download_with_retries(
                 proxy=getattr(args, "proxy", None),
                 rate_limit=getattr(args, "rate_limit", None),
                 headers=parse_headers(getattr(args, "headers", [])),
+                force_generic=getattr(args, "force_generic", False),
+                extractor_args=parse_extractor_args(getattr(args, "extractor_args", [])),
+                cookies=getattr(args, "cookies", None),
             )
         else:
             rc = download_video(
@@ -241,6 +290,9 @@ def run_download_with_retries(
                 proxy=getattr(args, "proxy", None),
                 rate_limit=getattr(args, "rate_limit", None),
                 headers=parse_headers(getattr(args, "headers", [])),
+                force_generic=getattr(args, "force_generic", False),
+                extractor_args=parse_extractor_args(getattr(args, "extractor_args", [])),
+                cookies=getattr(args, "cookies", None),
             )
         if rc == 0:
             return 0
@@ -266,6 +318,9 @@ def download_audio(
     proxy: Optional[str] = None,
     rate_limit: Optional[int] = None,
     headers: Optional[dict] = None,
+    force_generic: bool = False,
+    extractor_args: Optional[dict] = None,
+    cookies: Optional[str] = None,
 ) -> int:
     """
     download_audio - this function downloads audio from a given URL.
@@ -291,6 +346,12 @@ def download_audio(
             }
         ],
     }
+    if force_generic:
+        ydl_opts["force_generic_extractor"] = True
+    if extractor_args:
+        ydl_opts["extractor_args"] = extractor_args
+    if cookies:
+        ydl_opts["cookiefile"] = cookies
     if ytdl_logger is not None:
         ydl_opts["logger"] = ytdl_logger
     if quiet:
@@ -332,6 +393,9 @@ def download_video(
     proxy: Optional[str] = None,
     rate_limit: Optional[int] = None,
     headers: Optional[dict] = None,
+    force_generic: bool = False,
+    extractor_args: Optional[dict] = None,
+    cookies: Optional[str] = None,
 ) -> int:
     """
     download_video - this function downloads video from a given URL.
@@ -350,6 +414,12 @@ def download_video(
         "outtmpl": outtmpl,
         "merge_output_format": "mp4",
     }
+    if force_generic:
+        ydl_opts["force_generic_extractor"] = True
+    if extractor_args:
+        ydl_opts["extractor_args"] = extractor_args
+    if cookies:
+        ydl_opts["cookiefile"] = cookies
     if ytdl_logger is not None:
         ydl_opts["logger"] = ytdl_logger
     if quiet:

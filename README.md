@@ -2,6 +2,8 @@
 
 CLI tool to download audio or video using yt-dlp.
 
+This tool uses `yt-dlp` under the hood and therefore supports downloading from the many websites and extractors that `yt-dlp` supports (not limited to YouTube). If you encounter a site that does not have a specialized extractor, use the `--force-generic` flag to force the generic extractor.
+
 ## Setup
 
 ```bash
@@ -111,6 +113,20 @@ python downloader.py --type audio --rate-limit 50000 <url>
 
 # Send custom headers (repeatable)
 python downloader.py --type video --header "Authorization: Bearer TOKEN" --header "X-My: header" <url>
+```
+
+Extractor-specific arguments:
+
+```bash
+# Pass extractor-specific args using the same syntax as yt-dlp. Repeatable.
+python downloader.py --type video --extractor-args "example:auth_token=TOKEN&someflag=1" <url>
+```
+
+Cookies file:
+
+```bash
+# Provide a Netscape-format cookies file (or cookies.txt) to send with requests
+python downloader.py --type video --cookies /path/to/cookies.txt <url>
 ```
 
 Progress display:
