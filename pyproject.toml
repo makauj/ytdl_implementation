@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "downloader"
+version = "0.1.0"
+description = "Simple CLI audio/video downloader using yt-dlp"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["yt-dlp", "downloader", "video", "audio"]
+
+dependencies = [
+  "yt-dlp"
+]
+
+[project.scripts]
+downloader = "downloader:main"

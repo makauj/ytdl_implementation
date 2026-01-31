@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+downloader.egg-info/PKG-INFO
+downloader.egg-info/SOURCES.txt
+downloader.egg-info/dependency_links.txt
+downloader.egg-info/entry_points.txt
+downloader.egg-info/requires.txt
+downloader.egg-info/top_level.txt
+tests/test_cli.py
+tests/test_config.py
+tests/test_integration.py
